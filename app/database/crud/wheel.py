@@ -271,6 +271,24 @@ async def get_user_spin_history(
     return spins, total
 
 
+async def get_recent_public_wins(db: AsyncSession, limit: int = 20) -> list[WheelSpin]:
+    """Последние выигрыши всех игроков для публичной ленты (без данных пользователей).
+
+    Только начисленные спины с реальным призом: «ничего» в ленту не попадает.
+    """
+    result = await db.execute(
+        select(WheelSpin)
+        .options(selectinload(WheelSpin.prize))
+        .where(
+            WheelSpin.is_applied.is_(True),
+            WheelSpin.prize_type != 'nothing',
+        )
+        .order_by(desc(WheelSpin.id))
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def get_all_spins(
     db: AsyncSession,
     user_id: int | None = None,

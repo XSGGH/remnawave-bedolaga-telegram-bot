@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cabinet.dependencies import get_cabinet_db, get_current_cabinet_user
 from app.cabinet.schemas.wheel import (
+    RecentWinItem,
+    RecentWinsResponse,
     SpinAvailabilityResponse,
     SpinHistoryItem,
     SpinHistoryResponse,
@@ -23,6 +25,7 @@ from app.cabinet.schemas.wheel import (
 from app.config import settings
 from app.database.crud.wheel import (
     get_or_create_wheel_config,
+    get_recent_public_wins,
     get_user_spin_history,
     get_user_spins_today,
     get_wheel_prizes,
@@ -209,6 +212,41 @@ async def get_spin_history(
         per_page=per_page,
         pages=pages,
     )
+
+
+_RECENT_WINS_TTL_SECONDS = 10.0
+_recent_wins_cache: dict[int, tuple[float, RecentWinsResponse]] = {}
+
+
+@router.get('/recent-wins', response_model=RecentWinsResponse)
+async def get_recent_wins(
+    limit: int = 20,
+    user: User = Depends(get_current_cabinet_user),
+    db: AsyncSession = Depends(get_cabinet_db),
+):
+    """Лента последних выигрышей всех игроков — анонимно, без имён и id пользователей."""
+    limit = min(max(limit, 1), 50)
+
+    cached = _recent_wins_cache.get(limit)
+    now = time.monotonic()
+    if cached and now - cached[0] < _RECENT_WINS_TTL_SECONDS:
+        return cached[1]
+
+    spins = await get_recent_public_wins(db, limit=limit)
+    response = RecentWinsResponse(
+        items=[
+            RecentWinItem(
+                id=spin.id,
+                prize_type=spin.prize_type,
+                prize_display_name=spin.prize_display_name,
+                emoji=spin.prize.emoji if spin.prize else '🎁',
+                created_at=spin.created_at,
+            )
+            for spin in spins
+        ]
+    )
+    _recent_wins_cache[limit] = (now, response)
+    return response
 
 
 class StarsInvoiceResponse(BaseModel):

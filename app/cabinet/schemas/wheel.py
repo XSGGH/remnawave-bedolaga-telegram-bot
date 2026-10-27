@@ -134,6 +134,22 @@ class SpinHistoryResponse(BaseModel):
     pages: int
 
 
+class RecentWinItem(BaseModel):
+    """Выигрыш в публичной ленте. Намеренно без данных игрока."""
+
+    id: int
+    prize_type: str
+    prize_display_name: str
+    emoji: str = '🎁'
+    created_at: datetime
+
+
+class RecentWinsResponse(BaseModel):
+    """Лента последних выигрышей всех игроков."""
+
+    items: list[RecentWinItem]
+
+
 # ==================== ADMIN SCHEMAS ====================
 
 
